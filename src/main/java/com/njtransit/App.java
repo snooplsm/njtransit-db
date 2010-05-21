@@ -17,11 +17,13 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
-import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
@@ -34,62 +36,106 @@ import au.com.bytecode.opencsv.CSVReader;
  * 
  */
 public class App {
-	
-	private static DateFormat local = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.FULL);
-	private static DateFormat gmt = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.FULL);
+
+	private static DateFormat local = DateFormat.getDateTimeInstance(
+			DateFormat.MEDIUM, DateFormat.FULL);
+	private static DateFormat gmt = DateFormat.getDateTimeInstance(
+			DateFormat.MEDIUM, DateFormat.FULL);
 	private static DateFormat njt = new SimpleDateFormat("yyyyddMM");
-	
+	private static DateFormat time = new SimpleDateFormat("yyyy-dd-mm kk:mm:ss");
+
 	static {
 		gmt.setTimeZone(TimeZone.getTimeZone("GMT"));
+		local.setTimeZone(TimeZone.getTimeZone("America/New_York"));
+		njt.setTimeZone(TimeZone.getTimeZone("America/New_York"));
+		time.setTimeZone(TimeZone.getTimeZone("America/New_York"));
+
 	}
-	
+
+	private static Long gmt(Date date) {
+		long msFromEpochGmt = date.getTime();
+		int offsetFromUTC = TimeZone.getTimeZone("America/New_York").getOffset(
+				msFromEpochGmt);
+		Calendar gmtCal = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
+		gmtCal.setTime(date);
+		gmtCal.add(Calendar.MILLISECOND, offsetFromUTC);
+		return gmtCal.getTimeInMillis();
+	}
+
 	public static void main(String[] args) throws Exception {
 		HttpClient c = new HttpClient();
 		PostMethod m = new PostMethod(
 				"https://www.njtransit.com/mt/mt_servlet.srv?hdnPageAction=MTDevLoginSubmitTo");
 		m.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
-		m.setRequestEntity(new StringRequestEntity(
-				"userName="+ System.getProperty("username")+"&password="+System.getProperty("password"),
+		m.setRequestEntity(new StringRequestEntity("userName="
+				+ System.getProperty("username") + "&password="
+				+ System.getProperty("password"),
 				"application/x-www-form-urlencoded", "utf-8"));
 		c.executeMethod(m);
 		m.releaseConnection();
 		GetMethod g = new GetMethod(
 				"https://www.njtransit.com/mt/mt_servlet.srv?hdnPageAction=MTDevResourceDownloadTo&Category=rail");
 		File railData = new File(System.getProperty("zip_destination"));
-		if(railData.exists()) {			
+		if (railData.exists()) {
 			Date d = new Date(railData.lastModified());
 			System.out.println(local.format(d));
 			System.out.println(gmt.format(d));
 			g.addRequestHeader("If-Modified-Since", gmt.format(d));
 		}
 		c.executeMethod(g);
-		FileOutputStream fos = new FileOutputStream(
-				railData);
+		FileOutputStream fos = new FileOutputStream(railData);
 		BufferedOutputStream bos = new BufferedOutputStream(fos);
 		byte[] mybites = new byte[1024];
-		while (g.getResponseBodyAsStream().read(mybites) != -1) {
-			bos.write(mybites);
+		int read;
+		while ((read = g.getResponseBodyAsStream().read(mybites)) != -1) {
+			bos.write(mybites,0,read);
 		}
 		bos.close();
 		
-		if(g.getResponseHeader("Last-Modified")!=null) {
-			railData.setLastModified(local.parse(g.getResponseHeader("Last-Modified").getValue()).getTime());
+		ZipInputStream zis = new ZipInputStream(new FileInputStream(railData));
+		ZipEntry entry = zis.getNextEntry();
+		while(entry!=null) {
+			String entryName = entry.getName();
+            FileOutputStream fileoutputstream;
+            File newFile = new File(railData.getParent(),entryName);
+            String directory = newFile.getParent();
+            
+            if(directory == null)
+            {
+                if(newFile.isDirectory())
+                    break;
+            }
+            
+            fileoutputstream = new FileOutputStream(newFile);             
+            System.out.println(newFile);
+            while ((read = zis.read(mybites, 0, mybites.length)) > -1)
+                fileoutputstream.write(mybites, 0, read);
+
+            fileoutputstream.close(); 
+            zis.closeEntry();
+            entry = zis.getNextEntry();
+		}
+
+		if (g.getResponseHeader("Last-Modified") != null) {
+			railData.setLastModified(local.parse(
+					g.getResponseHeader("Last-Modified").getValue()).getTime());
 		}
 
 		InputStream orig = App.class
 				.getResourceAsStream("../../njtransit.sqlite");
-		FileOutputStream out = new FileOutputStream(
-				System.getProperty("destination"));
-		while (orig.read(mybites) != -1) {
-			out.write(mybites);
+		FileOutputStream out = new FileOutputStream(System
+				.getProperty("destination"));
+		while ((read = orig.read(mybites)) != -1) {
+			out.write(mybites,0,read);
 		}
 		out.close();
-		
-		FileInputStream in = new FileInputStream(System.getProperty("destination"));
-		
+
+		FileInputStream in = new FileInputStream(System
+				.getProperty("destination"));
+
 		Class.forName("org.sqlite.JDBC");
-		Connection conn = DriverManager
-				.getConnection("jdbc:sqlite:"+System.getProperty("destination"));
+		Connection conn = DriverManager.getConnection("jdbc:sqlite:"
+				+ System.getProperty("destination"));
 		Statement stat = conn.createStatement();
 		String[] creates = new String[] {
 				"create table if not exists trips(id int primary key, route_id int, service_id int, headsign varchar(255), direction int, block_id varchar(255))",
@@ -104,7 +150,6 @@ public class App {
 			stat.executeUpdate(createTable);
 		}
 
-		final SimpleDateFormat df = new SimpleDateFormat("dd/MM/yyyy kk:mm:ss");
 		final TransactionManager manager = new TransactionManager(conn);
 
 		loadPartitioned(manager, "stop_times", new ContentValuesProvider() {
@@ -120,12 +165,10 @@ public class App {
 					o.add(nextLine[0]);
 					try {
 						if (nextLine[1].trim().length() != 0) {
-							o.add(df.parse("01/01/1970 " + nextLine[1])
-									.getTime());
+							o.add(gmt(time.parse("01-01-1970 " + nextLine[1])));
 						}
 						if (nextLine[2].trim().length() != 0) {
-							o.add(df.parse("01/01/1970 " + nextLine[2])
-									.getTime());
+							o.add(gmt(time.parse("01-01-1970 " + nextLine[2])));
 						}
 					} catch (Exception e) {
 						e.printStackTrace();
@@ -221,16 +264,15 @@ public class App {
 					o.add(nextLine[3]);
 					o.add(nextLine[4]);
 					o.add(nextLine[5]);
-					o.add(nextLine[6]);
-					o.add(nextLine[7]);				
+					o.add(nextLine[7]);
 					try {
-						o.add(njt.parse(nextLine[8]).getTime());
+						o.add(gmt(njt.parse(nextLine[8])));
 					} catch (ParseException e1) {
 						// TODO Auto-generated catch block
 						e1.printStackTrace();
 					}
 					try {
-						o.add(njt.parse(nextLine[9]).getTime());
+						o.add(gmt(njt.parse(nextLine[9])));
 					} catch (ParseException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
@@ -261,10 +303,12 @@ public class App {
 					List<Object> o = new ArrayList<Object>();
 					o.add(nextLine[0]);
 					String start = nextLine[1];
-					String year = start.substring(0, 4);
-					String month = start.substring(4, 6);
-					String day = start.substring(6, 8);
-					o.add(year + "-" + month + "-" + day);
+					try {
+						o.add(gmt(njt.parse(start)));
+					} catch (ParseException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
 					o.add(nextLine[2]);
 					values.add(o);
 				}
@@ -334,30 +378,30 @@ public class App {
 		});
 
 		MessageDigest d = MessageDigest.getInstance("SHA-1");
-				
-		while(in.read(mybites)!=-1) {
+
+		while (in.read(mybites) != -1) {
 			d.update(mybites);
 		}
-		out = new FileOutputStream(System.getProperty("destination")+".sha");
+		out = new FileOutputStream(System.getProperty("destination") + ".sha");
 		out.write(convertToHex(d.digest()).getBytes());
 		out.close();
 	}
-	
+
 	private static String convertToHex(byte[] data) {
-        StringBuffer buf = new StringBuffer();
-        for (int i = 0; i < data.length; i++) {
-            int halfbyte = (data[i] >>> 4) & 0x0F;
-            int two_halfs = 0;
-            do {
-                if ((0 <= halfbyte) && (halfbyte <= 9))
-                    buf.append((char) ('0' + halfbyte));
-                else
-                    buf.append((char) ('a' + (halfbyte - 10)));
-                halfbyte = data[i] & 0x0F;
-            } while(two_halfs++ < 1);
-        }
-        return buf.toString();
-    }
+		StringBuffer buf = new StringBuffer();
+		for (int i = 0; i < data.length; i++) {
+			int halfbyte = (data[i] >>> 4) & 0x0F;
+			int two_halfs = 0;
+			do {
+				if ((0 <= halfbyte) && (halfbyte <= 9))
+					buf.append((char) ('0' + halfbyte));
+				else
+					buf.append((char) ('a' + (halfbyte - 10)));
+				halfbyte = data[i] & 0x0F;
+			} while (two_halfs++ < 1);
+		}
+		return buf.toString();
+	}
 
 	private static void loadPartitioned(TransactionManager tm,
 			final String tableName, final ContentValuesProvider valuesProvider)
@@ -374,7 +418,7 @@ public class App {
 				CSVReader reader = null;
 				try {
 					final String fileName = tableName + ".txt";
-					input = App.class.getResourceAsStream("../../" + fileName);
+					input = new FileInputStream(new File(System.getProperty("zip_destination")).getParent()+"/"+fileName);
 					reader = new CSVReader(new InputStreamReader(input));
 					reader.readNext(); // read in the header line
 					List<List<Object>> values = valuesProvider
