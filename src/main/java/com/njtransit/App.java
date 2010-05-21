@@ -1,6 +1,7 @@
 package com.njtransit;
 
 import java.io.BufferedOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -12,9 +13,12 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.TimeZone;
 
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
@@ -28,6 +32,14 @@ import au.com.bytecode.opencsv.CSVReader;
  * 
  */
 public class App {
+	
+	private static DateFormat local = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.FULL);
+	private static DateFormat gmt = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.FULL);
+	
+	static {
+		gmt.setTimeZone(TimeZone.getTimeZone("GMT"));
+	}
+	
 	public static void main(String[] args) throws Exception {
 		HttpClient c = new HttpClient();
 		PostMethod m = new PostMethod(
@@ -40,13 +52,25 @@ public class App {
 		m.releaseConnection();
 		GetMethod g = new GetMethod(
 				"https://www.njtransit.com/mt/mt_servlet.srv?hdnPageAction=MTDevResourceDownloadTo&Category=rail");
+		File railData = new File(System.getProperty("zip_destination"));
+		if(railData.exists()) {			
+			Date d = new Date(railData.lastModified());
+			System.out.println(local.format(d));
+			System.out.println(gmt.format(d));
+			g.addRequestHeader("If-Modified-Since", gmt.format(d));
+		}
 		c.executeMethod(g);
 		FileOutputStream fos = new FileOutputStream(
-				System.getProperty("zip_destination"));
+				railData);
 		BufferedOutputStream bos = new BufferedOutputStream(fos);
 		byte[] mybites = new byte[1024];
 		while (g.getResponseBodyAsStream().read(mybites) != -1) {
 			bos.write(mybites);
+		}
+		bos.close();
+		
+		if(g.getResponseHeader("Last-Modified")!=null) {
+			railData.setLastModified(local.parse(g.getResponseHeader("Last-Modified").getValue()).getTime());
 		}
 
 		InputStream orig = App.class
