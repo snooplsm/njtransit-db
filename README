@@ -1,3 +1,13 @@
 Create executable jar:
 
 mvn clean assembly:assembly
+
+
+Executing:
+
+java -jar target/fileName.jar -Ddestination= -Dusername= -Dpassword= -Dzip_destination
+
+destination = sqlite destination
+username = njtransit username
+password = njtransit password
+zip_destination = rail_data.zip destination
