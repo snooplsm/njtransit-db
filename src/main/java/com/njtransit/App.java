@@ -14,12 +14,14 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.DateFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.TimeZone;
 
+import org.apache.commons.codec.binary.Base64;
 import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
@@ -35,6 +37,7 @@ public class App {
 	
 	private static DateFormat local = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.FULL);
 	private static DateFormat gmt = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.FULL);
+	private static DateFormat njt = new SimpleDateFormat("yyyyddMM");
 	
 	static {
 		gmt.setTimeZone(TimeZone.getTimeZone("GMT"));
@@ -93,7 +96,7 @@ public class App {
 				"create table if not exists stops(id int primary key, name varchar(255), desc varchar(255), lat real, lon real, zone_id)",
 				"create table if not exists stop_times(trip_id int, arrival int, departure int, stop_id int, sequence int, pickup_type int, drop_off_type int)",
 				"create table if not exists routes(id int primary key, agency_id int, short_name varchar(255), long_name varchar(255), route_type int)",
-				"create table if not exists calendar(service_id int, monday int, tuesday int, wednesday int, thursday int, friday int, saturday int, sunday int, start date, end date)",
+				"create table if not exists calendar(service_id int, monday int, tuesday int, wednesday int, thursday int, friday int, saturday int, sunday int, start int, end int)",
 				// agency_id,agency_name,agency_url,agency_timezone
 				"create table if not exists calendar_dates(service_id int, calendar_date int, exception_type int)",
 				"create table if not exists agency(id int primary key, name varchar(255), url varchar(255))" };
@@ -219,17 +222,19 @@ public class App {
 					o.add(nextLine[4]);
 					o.add(nextLine[5]);
 					o.add(nextLine[6]);
-					o.add(nextLine[7]);
-					String start = nextLine[8];
-					String end = nextLine[9];
-					String year = start.substring(0, 4);
-					String month = start.substring(4, 6);
-					String day = start.substring(6, 8);
-					o.add(year + "-" + month + "-" + day);
-					year = end.substring(0, 4);
-					month = end.substring(4, 6);
-					day = end.substring(6, 8);
-					o.add(year + "-" + month + "-" + day);
+					o.add(nextLine[7]);				
+					try {
+						o.add(njt.parse(nextLine[8]).getTime());
+					} catch (ParseException e1) {
+						// TODO Auto-generated catch block
+						e1.printStackTrace();
+					}
+					try {
+						o.add(njt.parse(nextLine[9]).getTime());
+					} catch (ParseException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
 					values.add(o);
 				}
 				return values;
@@ -328,14 +333,31 @@ public class App {
 
 		});
 
-		MessageDigest d = MessageDigest.getInstance("sha");
+		MessageDigest d = MessageDigest.getInstance("SHA-1");
 				
 		while(in.read(mybites)!=-1) {
 			d.update(mybites);
 		}
 		out = new FileOutputStream(System.getProperty("destination")+".sha");
-		out.write(d.digest());
+		out.write(convertToHex(d.digest()).getBytes());
+		out.close();
 	}
+	
+	private static String convertToHex(byte[] data) {
+        StringBuffer buf = new StringBuffer();
+        for (int i = 0; i < data.length; i++) {
+            int halfbyte = (data[i] >>> 4) & 0x0F;
+            int two_halfs = 0;
+            do {
+                if ((0 <= halfbyte) && (halfbyte <= 9))
+                    buf.append((char) ('0' + halfbyte));
+                else
+                    buf.append((char) ('a' + (halfbyte - 10)));
+                halfbyte = data[i] & 0x0F;
+            } while(two_halfs++ < 1);
+        }
+        return buf.toString();
+    }
 
 	private static void loadPartitioned(TransactionManager tm,
 			final String tableName, final ContentValuesProvider valuesProvider)
