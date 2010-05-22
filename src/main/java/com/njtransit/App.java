@@ -165,10 +165,10 @@ public class App {
 					o.add(nextLine[0]);
 					try {
 						if (nextLine[1].trim().length() != 0) {
-							o.add(gmt(time.parse("01-01-1970 " + nextLine[1])));
+							o.add(gmt(time.parse("1970-01-01 " + nextLine[1])));
 						}
 						if (nextLine[2].trim().length() != 0) {
-							o.add(gmt(time.parse("01-01-1970 " + nextLine[2])));
+							o.add(gmt(time.parse("1970-01-01 " + nextLine[2])));
 						}
 					} catch (Exception e) {
 						e.printStackTrace();
@@ -378,9 +378,9 @@ public class App {
 		});
 
 		MessageDigest d = MessageDigest.getInstance("SHA-1");
-
-		while (in.read(mybites) != -1) {
-			d.update(mybites);
+		
+		while ((read = in.read(mybites)) != -1) {
+			d.update(mybites, 0, read);
 		}
 		out = new FileOutputStream(System.getProperty("destination") + ".sha");
 		out.write(convertToHex(d.digest()).getBytes());
