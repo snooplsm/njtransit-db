@@ -417,7 +417,7 @@ public class App {
 				CSVReader reader = null;
 				try {
 					final String fileName = tableName + ".txt";
-					input = new FileInputStream(new File(System.getProperty("zip_destination")).getParent()+"/"+fileName);
+					input = new FileInputStream(new File(System.getProperty("zipDestination")).getParent()+"/"+fileName);
 					reader = new CSVReader(new InputStreamReader(input));
 					reader.readNext(); // read in the header line
 					List<List<Object>> values = valuesProvider
