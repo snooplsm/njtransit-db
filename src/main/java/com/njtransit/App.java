@@ -147,7 +147,9 @@ public class App {
 				"create table if not exists calendar(service_id int, monday int, tuesday int, wednesday int, thursday int, friday int, saturday int, sunday int, start int, end int)",
 				// agency_id,agency_name,agency_url,agency_timezone
 				"create table if not exists calendar_dates(service_id int, calendar_date int, exception_type int)",
-				"create table if not exists agency(id int primary key, name varchar(255), url varchar(255))" };
+				"create table if not exists agency(id int primary key, name varchar(255), url varchar(255))",
+				"CREATE TABLE android_metadata (locale TEXT DEFAULT 'en_US')",
+				"INSERT INTO android_metadata VALUES ('en_US')"};
 		for (String createTable : creates) {
 			stat.executeUpdate(createTable);
 		}
