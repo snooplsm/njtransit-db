@@ -83,6 +83,9 @@ public class App {
 			g.addRequestHeader("If-Modified-Since", gmt.format(d));
 		}
 		c.executeMethod(g);
+		if(railData.exists()) {
+			railData.delete();
+		}
 		FileOutputStream fos = new FileOutputStream(railData);
 		BufferedOutputStream bos = new BufferedOutputStream(fos);
 		byte[] mybites = new byte[1024];
