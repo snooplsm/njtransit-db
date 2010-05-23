@@ -75,7 +75,7 @@ public class App {
 		m.releaseConnection();
 		GetMethod g = new GetMethod(
 				"https://www.njtransit.com/mt/mt_servlet.srv?hdnPageAction=MTDevResourceDownloadTo&Category=rail");
-		File railData = new File(System.getProperty("zip_destination"));
+		File railData = new File(System.getProperty("zipDestination"));
 		if (railData.exists()) {
 			Date d = new Date(railData.lastModified());
 			System.out.println(local.format(d));
@@ -121,8 +121,7 @@ public class App {
 					g.getResponseHeader("Last-Modified").getValue()).getTime());
 		}
 
-		InputStream orig = App.class
-				.getResourceAsStream("../../njtransit.sqlite");
+		InputStream orig = new FileInputStream(System.getProperty("sqlite"));
 		FileOutputStream out = new FileOutputStream(System
 				.getProperty("destination"));
 		while ((read = orig.read(mybites)) != -1) {
