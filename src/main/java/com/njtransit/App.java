@@ -140,14 +140,14 @@ public class App {
 				+ System.getProperty("destination"));
 		Statement stat = conn.createStatement();
 		String[] creates = new String[] {
-				"create table if not exists trips(id int primary key, route_id int, service_id int, headsign varchar(255), direction int, block_id varchar(255))",
-				"create table if not exists stops(id int primary key, name varchar(255), desc varchar(255), lat real, lon real, zone_id)",
+				"create table if not exists trips(id int, route_id int, service_id int, headsign varchar(255), direction int, block_id varchar(255))",
+				"create table if not exists stops(id int, name varchar(255), desc varchar(255), lat real, lon real, zone_id)",
 				"create table if not exists stop_times(trip_id int, arrival int, departure int, stop_id int, sequence int, pickup_type int, drop_off_type int)",
-				"create table if not exists routes(id int primary key, agency_id int, short_name varchar(255), long_name varchar(255), route_type int)",
+				"create table if not exists routes(id int, agency_id int, short_name varchar(255), long_name varchar(255), route_type int)",
 				"create table if not exists calendar(service_id int, monday int, tuesday int, wednesday int, thursday int, friday int, saturday int, sunday int, start int, end int)",
 				// agency_id,agency_name,agency_url,agency_timezone
 				"create table if not exists calendar_dates(service_id int, calendar_date int, exception_type int)",
-				"create table if not exists agency(id int primary key, name varchar(255), url varchar(255))",
+				"create table if not exists agency(id int, name varchar(255), url varchar(255))",
 				"CREATE TABLE android_metadata (locale TEXT DEFAULT 'en_US')",
 				"INSERT INTO android_metadata VALUES ('en_US')"};
 		for (String createTable : creates) {
@@ -218,7 +218,7 @@ public class App {
 
 			@Override
 			public String getInsertString() {
-				return "insert into trips (route_id,service_id,id,direction,headsign,block_id) values (?,?,?,?,?,?)";
+				return "insert into trips (route_id,service_id,id,headsign,direction,block_id) values (?,?,?,?,?,?)";
 			}
 
 		});
