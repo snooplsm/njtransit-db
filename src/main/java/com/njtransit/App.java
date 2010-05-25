@@ -42,7 +42,7 @@ public class App {
 	private static DateFormat gmt = DateFormat.getDateTimeInstance(
 			DateFormat.MEDIUM, DateFormat.FULL);
 	private static DateFormat njt = new SimpleDateFormat("yyyyddMM");
-	private static DateFormat time = new SimpleDateFormat("yyyy-dd-mm kk:mm:ss");
+	private static DateFormat time = new SimpleDateFormat("yyyy-dd-MM kk:mm:ss");
 
 	static {
 		gmt.setTimeZone(TimeZone.getTimeZone("GMT"));
@@ -59,7 +59,7 @@ public class App {
 		Calendar gmtCal = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
 		gmtCal.setTime(date);
 		gmtCal.add(Calendar.MILLISECOND, offsetFromUTC);
-		return gmtCal.getTimeInMillis();
+		return gmtCal.getTimeInMillis()/1000;
 	}
 
 	public static void main(String[] args) throws Exception {
@@ -167,11 +167,16 @@ public class App {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
 					o.add(nextLine[0]);
+					Calendar c = Calendar.getInstance();
 					try {
 						if (nextLine[1].trim().length() != 0) {
+							c.setTime(time.parse("1970-01-01 " + nextLine[1]));
+							System.out.print(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
 							o.add(gmt(time.parse("1970-01-01 " + nextLine[1])));
 						}
 						if (nextLine[2].trim().length() != 0) {
+							c.setTime(time.parse("1970-01-01 " + nextLine[2]));
+							System.out.print(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
 							o.add(gmt(time.parse("1970-01-01 " + nextLine[2])));
 						}
 					} catch (Exception e) {
