@@ -149,7 +149,12 @@ public class App {
 				"create table if not exists calendar_dates(service_id int, calendar_date int, exception_type int)",
 				"create table if not exists agency(id int, name varchar(255), url varchar(255))",
 				"CREATE TABLE android_metadata (locale TEXT DEFAULT 'en_US')",
-				"INSERT INTO android_metadata VALUES ('en_US')"};
+				"INSERT INTO android_metadata VALUES ('en_US')",
+				"create index trip_index on stop_times(trip_id)",
+				"create index stop_index on stop_times(stop_id)",
+				"create index sequence_index on stop_times(sequence)",
+				"create index departure_index on stop_times(departure)"};
+		
 		for (String createTable : creates) {
 			stat.executeUpdate(createTable);
 		}
@@ -168,15 +173,23 @@ public class App {
 					List<Object> o = new ArrayList<Object>();
 					o.add(nextLine[0]);
 					Calendar c = Calendar.getInstance();
+					if(nextLine[3].equals("148")) {
+						for(int i = 0; i < nextLine.length; i++) {
+							System.out.print(nextLine[i] + " ");
+						}
+						System.out.print("\n");
+					} else {
+						//continue;
+					}
 					try {
 						if (nextLine[1].trim().length() != 0) {
 							c.setTime(time.parse("1970-01-01 " + nextLine[1]));
-							System.out.print(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
+							//System.out.println(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
 							o.add(gmt(time.parse("1970-01-01 " + nextLine[1])));
 						}
 						if (nextLine[2].trim().length() != 0) {
 							c.setTime(time.parse("1970-01-01 " + nextLine[2]));
-							System.out.print(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
+							//System.out.println(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
 							o.add(gmt(time.parse("1970-01-01 " + nextLine[2])));
 						}
 					} catch (Exception e) {
@@ -184,7 +197,7 @@ public class App {
 						throw new RuntimeException(e);
 					}
 
-					o.add(nextLine[3]);
+					o.add(nextLine[3]);					
 					o.add(nextLine[4]);
 					o.add(nextLine[5]);
 					o.add(nextLine[6]);
@@ -265,15 +278,15 @@ public class App {
 				List<List<Object>> values = new ArrayList<List<Object>>();
 				String[] nextLine;
 				while ((nextLine = reader.readNext()) != null) {
-					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[0]);
-					o.add(nextLine[1]);
-					o.add(nextLine[2]);
-					o.add(nextLine[3]);
-					o.add(nextLine[4]);
-					o.add(nextLine[5]);
-					o.add(nextLine[7]);
+					o.add(nextLine[0]);//service_id
+					o.add(nextLine[1]);//monday
+					o.add(nextLine[2]);//tue
+					o.add(nextLine[3]);//wed
+					o.add(nextLine[4]);//thurs
+					o.add(nextLine[5]);//fri
+					o.add(nextLine[6]);//sat
+					o.add(nextLine[7]);//sun
 					try {
 						o.add(gmt(njt.parse(nextLine[8])));
 					} catch (ParseException e1) {
