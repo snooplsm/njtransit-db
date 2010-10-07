@@ -19,7 +19,9 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -72,19 +74,18 @@ public class App {
 				+ System.getProperty("password"),
 				"application/x-www-form-urlencoded", "utf-8"));
 		c.executeMethod(m);
+		System.out.println(m.getStatusCode());
 		m.releaseConnection();
 		GetMethod g = new GetMethod(
 				"https://www.njtransit.com/mt/mt_servlet.srv?hdnPageAction=MTDevResourceDownloadTo&Category=rail");
 		File railData = new File(System.getProperty("zipDestination"));
-		if (railData.exists()) {
-			Date d = new Date(railData.lastModified());
-			System.out.println(local.format(d));
-			System.out.println(gmt.format(d));
-			g.addRequestHeader("If-Modified-Since", gmt.format(d));
-		}
+		g.addRequestHeader("User-Agent", "Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-us) AppleWebKit/533.16 (KHTML, like Gecko) Version/5.0 Safari/533.16");
 		c.executeMethod(g);
 		if(railData.exists()) {
 			railData.delete();
+		}
+		if(railData.getParentFile()!=null && !railData.getParentFile().exists()) {
+			railData.getParentFile().mkdirs();
 		}
 		FileOutputStream fos = new FileOutputStream(railData);
 		BufferedOutputStream bos = new BufferedOutputStream(fos);
@@ -95,12 +96,15 @@ public class App {
 		}
 		bos.close();
 		
+		File file = new File(railData.getParent(),"gtfs");
+		file.delete();
+		file.mkdirs();
 		ZipInputStream zis = new ZipInputStream(new FileInputStream(railData));
 		ZipEntry entry = zis.getNextEntry();
 		while(entry!=null) {
 			String entryName = entry.getName();
             FileOutputStream fileoutputstream;
-            File newFile = new File(railData.getParent(),entryName);
+            File newFile = new File(railData.getParent(),"gtfs/"+entryName);
             String directory = newFile.getParent();
             
             if(directory == null)
@@ -125,30 +129,32 @@ public class App {
 		}
 
 		InputStream orig = new FileInputStream(System.getProperty("sqlite"));
-		FileOutputStream out = new FileOutputStream(System
-				.getProperty("destination"));
+		File database = new File(railData.getParent(),"sqlite");
+		File newDB = new File(database,"database.sqlite");
+		database.delete();
+		database.mkdirs();
+		FileOutputStream out = new FileOutputStream(newDB);
 		while ((read = orig.read(mybites)) != -1) {
 			out.write(mybites,0,read);
 		}
 		out.close();
 
-		FileInputStream in = new FileInputStream(System
-				.getProperty("destination"));
+		FileInputStream in = new FileInputStream(newDB);
 
 		Class.forName("org.sqlite.JDBC");
 		Connection conn = DriverManager.getConnection("jdbc:sqlite:"
-				+ System.getProperty("destination"));
+				+ newDB.getAbsolutePath());
 		Statement stat = conn.createStatement();
 		String[] creates = new String[] {
-				"create table if not exists trips(id int, route_id int, service_id int, headsign varchar(255), direction int, block_id varchar(255))",
+				"create table if not exists trips(id int, route_id int, service_id varchar(100), headsign varchar(255), direction int, block_id varchar(255))",
 				"create table if not exists stops(id int, name varchar(255), desc varchar(255), lat real, lon real, zone_id)",
 				"create table if not exists stop_times(trip_id int, arrival int, departure int, stop_id int, sequence int, pickup_type int, drop_off_type int)",
-				"create table if not exists routes(id int, agency_id int, short_name varchar(255), long_name varchar(255), route_type int)",
-				"create table if not exists calendar(service_id int, monday int, tuesday int, wednesday int, thursday int, friday int, saturday int, sunday int, start int, end int)",
+				"create table if not exists routes(id int, agency_id varchar(100), short_name varchar(255), long_name varchar(255), route_type int, timezone varchar(100))",
+				"create table if not exists calendar(service_id varchar(100), monday int, tuesday int, wednesday int, thursday int, friday int, saturday int, sunday int, start int, end int)",
 				// agency_id,agency_name,agency_url,agency_timezone
-				"create table if not exists calendar_dates(service_id int, calendar_date int, exception_type int)",
-				"create table if not exists agency(id int, name varchar(255), url varchar(255))",
-				"CREATE TABLE android_metadata (locale TEXT DEFAULT 'en_US')",
+				"create table if not exists calendar_dates(service_id varchar(100), calendar_date int, exception_type int)",
+				"create table if not exists agency(id varchar(100), name varchar(255), url varchar(255), timezone varchar(100))",
+				"CREATE TABLE if not exists android_metadata (locale TEXT DEFAULT 'en_US')",
 				"INSERT INTO android_metadata VALUES ('en_US')",
 				"create index trip_index on stop_times(trip_id)",
 				"create index stop_index on stop_times(stop_id)",
@@ -164,14 +170,14 @@ public class App {
 		loadPartitioned(manager, "stop_times", new ContentValuesProvider() {
 
 			@Override
-			public List<List<Object>> getContentValues(CSVReader reader)
+			public List<List<Object>> getContentValues(Map<String,Integer> headerToPos, CSVReader reader)
 					throws IOException {
 				List<List<Object>> values = new ArrayList<List<Object>>();
 				String[] nextLine;
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[0]);
+					o.add(nextLine[headerToPos.get("trip_id")]);
 					Calendar c = Calendar.getInstance();
 					if(nextLine[3].equals("148")) {
 						for(int i = 0; i < nextLine.length; i++) {
@@ -182,15 +188,15 @@ public class App {
 						//continue;
 					}
 					try {
-						if (nextLine[1].trim().length() != 0) {
-							c.setTime(time.parse("1970-01-01 " + nextLine[1]));
+						if (nextLine[headerToPos.get("arrival_time")].trim().length() != 0) {
+							c.setTime(time.parse("1970-01-01 " + nextLine[headerToPos.get("arrival_time")]));
 							//System.out.println(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
-							o.add(gmt(time.parse("1970-01-01 " + nextLine[1])));
+							o.add(gmt(time.parse("1970-01-01 " + nextLine[headerToPos.get("arrival_time")])));
 						}
-						if (nextLine[2].trim().length() != 0) {
-							c.setTime(time.parse("1970-01-01 " + nextLine[2]));
+						if (nextLine[headerToPos.get("departure_time")].trim().length() != 0) {
+							c.setTime(time.parse("1970-01-01 " + nextLine[headerToPos.get("departure_time")]));
 							//System.out.println(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
-							o.add(gmt(time.parse("1970-01-01 " + nextLine[2])));
+							o.add(gmt(time.parse("1970-01-01 " + nextLine[headerToPos.get("departure_time")])));
 						}
 					} catch (Exception e) {
 						e.printStackTrace();
@@ -216,19 +222,19 @@ public class App {
 		loadPartitioned(manager, "trips", new ContentValuesProvider() {
 
 			@Override
-			public List<List<Object>> getContentValues(CSVReader reader)
+			public List<List<Object>> getContentValues(Map<String,Integer> headerToPos,CSVReader reader)
 					throws IOException {
 				List<List<Object>> values = new ArrayList<List<Object>>();
 				String[] nextLine;
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[0]);
-					o.add(nextLine[1]);
-					o.add(nextLine[2]);
-					o.add(nextLine[3]);
-					o.add(nextLine[4]);
-					o.add(nextLine[5]);
+					o.add(nextLine[headerToPos.get("route_id")]);
+					o.add(nextLine[headerToPos.get("service_id")]);
+					o.add(nextLine[headerToPos.get("trip_id")]);
+					o.add(nextLine[headerToPos.get("trip_headsign")]);
+					o.add(nextLine[headerToPos.get("direction_id")]);
+					o.add(nextLine[headerToPos.get("block_id")]);
 					values.add(o);
 				}
 				return values;
@@ -244,19 +250,19 @@ public class App {
 		loadPartitioned(manager, "stops", new ContentValuesProvider() {
 
 			@Override
-			public List<List<Object>> getContentValues(CSVReader reader)
+			public List<List<Object>> getContentValues(Map<String,Integer> headerToPos,CSVReader reader)
 					throws IOException {
 				List<List<Object>> values = new ArrayList<List<Object>>();
 				String[] nextLine;
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[0]);
-					o.add(nextLine[1]);
-					o.add(nextLine[2]);
-					o.add(nextLine[3]);
-					o.add(nextLine[4]);
-					o.add(nextLine[5]);
+					o.add(nextLine[headerToPos.get("stop_id")]);
+					o.add(nextLine[headerToPos.get("stop_name")]);
+					o.add(nextLine[headerToPos.get("stop_desc")]);
+					o.add(nextLine[headerToPos.get("stop_lat")]);
+					o.add(nextLine[headerToPos.get("stop_lon")]);
+					o.add(nextLine[headerToPos.get("zone_id")]);
 					values.add(o);
 				}
 				return values;
@@ -273,20 +279,20 @@ public class App {
 		loadPartitioned(manager, "calendar", new ContentValuesProvider() {
 
 			@Override
-			public List<List<Object>> getContentValues(CSVReader reader)
+			public List<List<Object>> getContentValues(Map<String,Integer> headerToPos,CSVReader reader)
 					throws IOException {
 				List<List<Object>> values = new ArrayList<List<Object>>();
 				String[] nextLine;
 				while ((nextLine = reader.readNext()) != null) {
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[0]);//service_id
-					o.add(nextLine[1]);//monday
-					o.add(nextLine[2]);//tue
-					o.add(nextLine[3]);//wed
-					o.add(nextLine[4]);//thurs
-					o.add(nextLine[5]);//fri
-					o.add(nextLine[6]);//sat
-					o.add(nextLine[7]);//sun
+					o.add(nextLine[headerToPos.get("service_id")]);//service_id
+					o.add(nextLine[headerToPos.get("monday")]);//monday
+					o.add(nextLine[headerToPos.get("tuesday")]);//tue
+					o.add(nextLine[headerToPos.get("wednesday")]);//wed
+					o.add(nextLine[headerToPos.get("thursday")]);//thurs
+					o.add(nextLine[headerToPos.get("friday")]);//fri
+					o.add(nextLine[headerToPos.get("saturday")]);//sat
+					o.add(nextLine[headerToPos.get("sunday")]);//sun
 					try {
 						o.add(gmt(njt.parse(nextLine[8])));
 					} catch (ParseException e1) {
@@ -315,7 +321,7 @@ public class App {
 		loadPartitioned(manager, "calendar_dates", new ContentValuesProvider() {
 
 			@Override
-			public List<List<Object>> getContentValues(CSVReader reader)
+			public List<List<Object>> getContentValues(Map<String,Integer> headerToPos,CSVReader reader)
 					throws IOException {
 				reader.readNext();
 				List<List<Object>> values = new ArrayList<List<Object>>();
@@ -323,15 +329,15 @@ public class App {
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[0]);
-					String start = nextLine[1];
+					o.add(nextLine[headerToPos.get("service_id")]);
+					String start = nextLine[headerToPos.get("date")];
 					try {
 						o.add(gmt(njt.parse(start)));
 					} catch (ParseException e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
-					o.add(nextLine[2]);
+					o.add(nextLine[headerToPos.get("exception_type")]);
 					values.add(o);
 				}
 				return values;
@@ -348,18 +354,18 @@ public class App {
 		loadPartitioned(manager, "routes", new ContentValuesProvider() {
 
 			@Override
-			public List<List<Object>> getContentValues(CSVReader reader)
+			public List<List<Object>> getContentValues(Map<String,Integer> headerToPos,CSVReader reader)
 					throws IOException {
 				List<List<Object>> values = new ArrayList<List<Object>>();
 				String[] nextLine;
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[0]);
-					o.add(nextLine[1]);
-					o.add(nextLine[2]);
-					o.add(nextLine[3]);
-					o.add(nextLine[4]);
+					o.add(nextLine[headerToPos.get("route_id")]);
+					o.add(nextLine[headerToPos.get("agency_id")]);
+					o.add(nextLine[headerToPos.get("route_short_name")]);
+					o.add(nextLine[headerToPos.get("route_long_name")]);
+					o.add(nextLine[headerToPos.get("route_type")]);
 					values.add(o);
 				}
 				return values;
@@ -376,16 +382,26 @@ public class App {
 		loadPartitioned(manager, "agency", new ContentValuesProvider() {
 
 			@Override
-			public List<List<Object>> getContentValues(CSVReader reader)
+			public List<List<Object>> getContentValues(Map<String,Integer> headerToPos,CSVReader reader)
 					throws IOException {
 				List<List<Object>> values = new ArrayList<List<Object>>();
 				String[] nextLine;
+				String lastTimeZone = null;
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+					String timezone = nextLine[headerToPos.get("agency_timezone")];
+					if(lastTimeZone==null && timezone!=null) {
+						lastTimeZone = timezone;
+					}
+					if(!lastTimeZone.equals(timezone)) {
+						throw new RuntimeException("Weird case, more than 1 timezone, app not able to handle this.");
+					}
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[0]);
-					o.add(nextLine[1]);
-					o.add(nextLine[2]);
+					o.add(nextLine[headerToPos.get("agency_id")]);
+					o.add(nextLine[headerToPos.get("agency_name")]);
+					o.add(nextLine[headerToPos.get("agency_url")]);
+					
+					o.add(timezone);					
 					values.add(o);
 				}
 				return values;
@@ -394,7 +410,7 @@ public class App {
 			@Override
 			public String getInsertString() {
 				// agency_id,agency_name,agency_url
-				return "insert into agency (id,name,url) values (?,?,?)";
+				return "insert into agency (id,name,url,timezone) values (?,?,?,?)";
 			}
 
 		});
@@ -440,15 +456,24 @@ public class App {
 				CSVReader reader = null;
 				try {
 					final String fileName = tableName + ".txt";
-					input = new FileInputStream(new File(System.getProperty("zipDestination")).getParent()+"/"+fileName);
+					File file = new File(new File(System.getProperty("zipDestination")).getParent()+"/gtfs/"+fileName);
+					if(!file.exists()) {
+						System.out.println("No "+tableName+".txt, thats ok just know it");
+						return;
+					}
+					input = new FileInputStream(file);
 					reader = new CSVReader(new InputStreamReader(input));
-					reader.readNext(); // read in the header line
+					Map<String,Integer> headerToPos = new HashMap<String,Integer>();
+					int i = 0;
+					for(String header : reader.readNext()) {
+						headerToPos.put(header, i++);
+					}
 					List<List<Object>> values = valuesProvider
-							.getContentValues(reader);
+							.getContentValues(headerToPos, reader);
 					PreparedStatement s = conn.prepareStatement(valuesProvider
 							.getInsertString());
 					for (List<Object> cv : values) {
-						for (int i = 0; i < cv.size(); i++) {
+						for (i = 0; i < cv.size(); i++) {
 							s.setObject(i + 1, cv.get(i));
 						}
 						s.addBatch();
@@ -459,8 +484,12 @@ public class App {
 					throw new RuntimeException(t);
 				} finally {
 					try {
-						input.close();
-						reader.close();
+						if(input!=null) {
+							input.close();
+						}
+						if(reader!=null) {
+							reader.close();
+						}
 					} catch (Throwable t) {
 						t.printStackTrace();
 						throw new RuntimeException(t);
