@@ -52,6 +52,11 @@
 			<artifactId>sqlite-jdbc</artifactId>
 			<version>056</version>
 		</dependency>
+		<dependency>
+			<groupId>joda-time</groupId>
+			<artifactId>joda-time</artifactId>
+			<version>1.6.2</version>
+		</dependency>
 	</dependencies>
 
 	<build>

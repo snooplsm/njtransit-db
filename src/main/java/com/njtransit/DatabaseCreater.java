@@ -32,6 +32,7 @@ import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.commons.httpclient.methods.StringRequestEntity;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,18 +56,12 @@ public class DatabaseCreater {
 
 	static {
 		utc.setTimeZone(TimeZone.getTimeZone("UTC"));		
-		dateFormat.setTimeZone(TimeZone.getTimeZone("America/New_York"));
-		dateTimeFormat.setTimeZone(TimeZone.getTimeZone("America/New_York"));
 	}
 
 	private Long utc(Date date) {
-		long msFromEpochGmt = date.getTime();
-		int offsetFromUTC = local.getTimeZone().getOffset(
-				msFromEpochGmt);
-		Calendar gmtCal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
-		gmtCal.setTime(date);
-		gmtCal.add(Calendar.MILLISECOND, offsetFromUTC);
-		return gmtCal.getTimeInMillis() / 1000;
+		long result = date.getTime()/1000;
+		return result;
+		//(date.getTime()+local.getTimeZone().getOffset(date.getTime())) / 1000;
 	}
 
 	public static void main(String[] args) throws Exception {
@@ -117,7 +112,7 @@ public class DatabaseCreater {
 				continue;
 			}
 			if ("-split".equals(args[i])) {
-				splitKiloBytes = Integer.parseInt(args[i + i]);
+				splitKiloBytes = Integer.parseInt(args[i + 1]);
 				splitBytes = splitKiloBytes*1024;
 				continue;
 			}
@@ -362,7 +357,7 @@ public class DatabaseCreater {
 		try {
 			fos = new FileOutputStream(name);
 			int neededNow = Math.min(neededTotal, this.read.length);
-			while (neededTotal>0 && (read = stream.read(this.read, 0, neededNow)) != -1) {
+			while (neededNow>0 && (read = stream.read(this.read, 0, neededNow)) != -1) {
 				fos.write(this.read, 0, read);
 				neededTotal-=read;
 				neededNow = Math.min(neededTotal, this.read.length);
@@ -388,7 +383,7 @@ public class DatabaseCreater {
 		char[] alphabet = new char[] {'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','y','x','z'};
 		File database = workDB;
 		long length = database.length();
-		int partitions = (int) Math.round(length / (1.0*splitKiloBytes*1024));
+		int partitions = (int) Math.ceil(length / (1.0*splitBytes));
 		//FIXME: c'mon Ryan, do some math to figure this out.
 		int places = 1;
 		while(true) {
@@ -547,24 +542,18 @@ public class DatabaseCreater {
 					try {
 						if (nextLine[headerToPos.get("arrival_time")].trim()
 								.length() != 0) {
-							c.setTime(dateTimeFormat.parse("1970-01-01 "
-									+ nextLine[headerToPos.get("arrival_time")]));
-							// System.out.println(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
+							
 							o.add(utc(dateTimeFormat.parse("1970-01-01 "
 									+ nextLine[headerToPos.get("arrival_time")])));
 						}
 						if (nextLine[headerToPos.get("departure_time")].trim()
-								.length() != 0) {
-							c.setTime(dateTimeFormat.parse("1970-01-01 "
-									+ nextLine[headerToPos
-											.get("departure_time")]));
+								.length() != 0) {							
 							// System.out.println(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
 							o.add(utc(dateTimeFormat.parse("1970-01-01 "
 									+ nextLine[headerToPos
 											.get("departure_time")])));
 						}
 					} catch (Exception e) {
-						e.printStackTrace();
 						throw new RuntimeException(e);
 					}
 
@@ -690,7 +679,6 @@ public class DatabaseCreater {
 			public List<List<Object>> getContentValues(
 					Map<String, Integer> headerToPos, CSVReader reader)
 					throws IOException {
-				reader.readNext();
 				List<List<Object>> values = new ArrayList<List<Object>>();
 				String[] nextLine;
 				while ((nextLine = reader.readNext()) != null) {
