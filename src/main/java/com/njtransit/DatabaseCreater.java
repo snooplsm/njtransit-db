@@ -13,13 +13,13 @@ import java.net.URLEncoder;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -32,7 +32,6 @@ import org.apache.commons.httpclient.HttpClient;
 import org.apache.commons.httpclient.methods.GetMethod;
 import org.apache.commons.httpclient.methods.PostMethod;
 import org.apache.commons.httpclient.methods.StringRequestEntity;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,13 +54,14 @@ public class DatabaseCreater {
 			DateFormat.MEDIUM, DateFormat.FULL);
 
 	static {
-		utc.setTimeZone(TimeZone.getTimeZone("UTC"));		
+		utc.setTimeZone(TimeZone.getTimeZone("UTC"));
 	}
 
 	private Long utc(Date date) {
-		long result = date.getTime()/1000;
+		long result = date.getTime() / 1000;
 		return result;
-		//(date.getTime()+local.getTimeZone().getOffset(date.getTime())) / 1000;
+		// (date.getTime()+local.getTimeZone().getOffset(date.getTime())) /
+		// 1000;
 	}
 
 	public static void main(String[] args) throws Exception {
@@ -84,9 +84,9 @@ public class DatabaseCreater {
 	private String workDir;
 
 	private int splitKiloBytes = 50;
-	private int splitBytes = 50*1024;
-	byte[] read = new byte[5*1024];
-	
+	private int splitBytes = 50 * 1024;
+	byte[] read = new byte[5 * 1024];
+
 	private boolean gzip = false;
 
 	DatabaseCreater(String[] args) {
@@ -113,7 +113,7 @@ public class DatabaseCreater {
 			}
 			if ("-split".equals(args[i])) {
 				splitKiloBytes = Integer.parseInt(args[i + 1]);
-				splitBytes = splitKiloBytes*1024;
+				splitBytes = splitKiloBytes * 1024;
 				continue;
 			}
 			if ("-gzip".equals(args[i])) {
@@ -161,9 +161,10 @@ public class DatabaseCreater {
 			if (workingDirectory.getParentFile() != null) {
 				workingDirectory.getParentFile().mkdirs();
 			}
-			g.addRequestHeader(
-					"User-Agent",
-					"Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-us) AppleWebKit/533.16 (KHTML, like Gecko) Version/5.0 Safari/533.16");
+			g
+					.addRequestHeader(
+							"User-Agent",
+							"Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_4; en-us) AppleWebKit/533.16 (KHTML, like Gecko) Version/5.0 Safari/533.16");
 			try {
 				c.executeMethod(g);
 			} catch (Exception e) {
@@ -353,83 +354,91 @@ public class DatabaseCreater {
 	private void split(InputStream stream, File name) {
 		int read = 0;
 		int neededTotal = this.splitBytes;
-		FileOutputStream fos = null;		
+		FileOutputStream fos = null;
 		try {
 			fos = new FileOutputStream(name);
 			int neededNow = Math.min(neededTotal, this.read.length);
-			while (neededNow>0 && (read = stream.read(this.read, 0, neededNow)) != -1) {
+			while (neededNow > 0
+					&& (read = stream.read(this.read, 0, neededNow)) != -1) {
 				fos.write(this.read, 0, read);
-				neededTotal-=read;
+				neededTotal -= read;
 				neededNow = Math.min(neededTotal, this.read.length);
-			}
-		}catch (Exception e) {
-			throw new RuntimeException(e);
-		} finally {
-			try {
-				fos.close();
-			} catch (IOException e) {
-				
-			}
-		}
-	}
-	
-	private void splitDatabase() {
-		File partitionFolder = new File(workDir,"target/partitions");
-		if(partitionFolder.exists()) {
-			partitionFolder.delete();
-		}
-		partitionFolder.mkdirs();
-		
-		char[] alphabet = new char[] {'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','y','x','z'};
-		File database = workDB;
-		long length = database.length();
-		int partitions = (int) Math.ceil(length / (1.0*splitBytes));
-		//FIXME: c'mon Ryan, do some math to figure this out.
-		int places = 1;
-		while(true) {
-			if(Math.pow(alphabet.length, places) >= partitions) {
-				break;
-			}
-			places++;
-		}
-		char[] partitionName = new char[places];
-		for(int j = 0; j < places; j++) {
-			partitionName[j] = 'a';
-		}
-		File db = new File(workDir,"target/database.sqlite");
-		FileInputStream fis = null;
-		BufferedInputStream bis = null;
-		try {
-			fis = new FileInputStream(db);
-			bis = new BufferedInputStream(fis);
-			File file = new File(partitionFolder,"database.sqlite_"+new String(partitionName));
-			split(bis, file);
-			boolean increasePrevious = false;
-			for(int h = 1; h < partitions; h++) {
-				for(int i = places-1; i > -1; i--) {			
-						int letter = (int)partitionName[i];
-						if((increasePrevious || i==places-1) && letter+1 > (int)'z') {
-							partitionName[i]='a';
-							increasePrevious=true;
-						} else {
-							if(increasePrevious || i==places-1) {
-								partitionName[i]=(char)((int)partitionName[i]+1);
-							} 
-							break;			
-						}		
-				}				
-				file = new File(partitionFolder,"database.sqlite_"+new String(partitionName));
-				split(bis,file);
 			}
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		} finally {
 			try {
-				if(fis!=null)fis.close();
+				fos.close();
+			} catch (IOException e) {
+
+			}
+		}
+	}
+
+	private void splitDatabase() {
+		File partitionFolder = new File(workDir, "target/partitions");
+		if (partitionFolder.exists()) {
+			partitionFolder.delete();
+		}
+		partitionFolder.mkdirs();
+
+		char[] alphabet = new char[] { 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+				'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't',
+				'u', 'v', 'w', 'y', 'x', 'z' };
+		File database = workDB;
+		long length = database.length();
+		int partitions = (int) Math.ceil(length / (1.0 * splitBytes));
+		// FIXME: c'mon Ryan, do some math to figure this out.
+		int places = 1;
+		while (true) {
+			if (Math.pow(alphabet.length, places) >= partitions) {
+				break;
+			}
+			places++;
+		}
+		char[] partitionName = new char[places];
+		for (int j = 0; j < places; j++) {
+			partitionName[j] = 'a';
+		}
+		File db = new File(workDir, "target/database.sqlite");
+		FileInputStream fis = null;
+		BufferedInputStream bis = null;
+		try {
+			fis = new FileInputStream(db);
+			bis = new BufferedInputStream(fis);
+			File file = new File(partitionFolder, "database.sqlite_"
+					+ new String(partitionName));
+			split(bis, file);
+			boolean increasePrevious = false;
+			for (int h = 1; h < partitions; h++) {
+				for (int i = places - 1; i > -1; i--) {
+					int letter = (int) partitionName[i];
+					if ((increasePrevious || i == places - 1)
+							&& letter + 1 > (int) 'z') {
+						partitionName[i] = 'a';
+						increasePrevious = true;
+					} else {
+						if (increasePrevious || i == places - 1) {
+							partitionName[i] = (char) ((int) partitionName[i] + 1);
+						}
+						break;
+					}
+				}
+				file = new File(partitionFolder, "database.sqlite_"
+						+ new String(partitionName));
+				split(bis, file);
+			}
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		} finally {
+			try {
+				if (fis != null)
+					fis.close();
 			} catch (IOException e) {
 			}
 			try {
-				if(bis!=null)bis.close();
+				if (bis != null)
+					bis.close();
 			} catch (IOException e) {
 			}
 		}
@@ -451,20 +460,24 @@ public class DatabaseCreater {
 			throw new RuntimeException(e2);
 		}
 		String[] creates = new String[] {
-				"create table if not exists trips(id int, route_id int, service_id varchar(100), headsign varchar(255), direction int, block_id varchar(255))",
-				"create table if not exists stops(id int, name varchar(255), desc varchar(255), lat real, lon real, zone_id)",
-				"create table if not exists stop_times(trip_id int, arrival int, departure int, stop_id int, sequence int, pickup_type int, drop_off_type int)",
+				"create table if not exists trips(id varchar(50), route_id int, service_id varchar(100), headsign varchar(255), direction int, block_id varchar(255))",
+				"create table if not exists stops(id varchar(50), name varchar(255), desc varchar(255), lat real, lon real, zone_id)",
+				"create table if not exists stop_times(trip_id varchar(50), arrival varchar(10), departure varchar(10), stop_id varchar(100), sequence int, pickup_type int, drop_off_type int)",
 				"create table if not exists routes(id int, agency_id varchar(100), short_name varchar(255), long_name varchar(255), route_type int, timezone varchar(100))",
 				"create table if not exists calendar(service_id varchar(100), monday int, tuesday int, wednesday int, thursday int, friday int, saturday int, sunday int, start int, end int)",
 				// agency_id,agency_name,agency_url,agency_timezone
-				"create table if not exists calendar_dates(service_id varchar(100), calendar_date int, exception_type int)",
+				"create table if not exists calendar_dates(service_id varchar(100), calendar_date varchar(10), exception_type int)",
 				"create table if not exists agency(id varchar(100), name varchar(255), url varchar(255), timezone varchar(100))",
 				"CREATE TABLE if not exists android_metadata (locale TEXT DEFAULT 'en_US')",
+				"create table if not exists schedule(departure_id int, arrival_id int, depart varchar(10), arrive varchar(10), trip_id varchar(20))",
 				"INSERT INTO android_metadata VALUES ('en_US')",
-				"create index trip_index on stop_times(trip_id)",
+				"create index service_index on trips(service_id)",
+				"create index schedule_index on schedule(departure_id,arrival_id)",
+				//"create index trip_index on stop_times(trip_id)",
 				"create index stop_index on stop_times(stop_id)",
-				"create index sequence_index on stop_times(sequence)",
-				"create index departure_index on stop_times(departure)" };
+				//"create index stop2_index on stop_times(stop_id,trip_id)",
+				//"create index sequence_index on stop_times(sequence)"
+				};
 
 		try {
 			for (String createTable : creates) {
@@ -504,7 +517,7 @@ public class DatabaseCreater {
 					o.add(timezone);
 					values.add(o);
 				}
-				if(lastTimeZone!=null) {
+				if (lastTimeZone != null) {
 					local.setTimeZone(TimeZone.getTimeZone(lastTimeZone));
 				}
 				return values;
@@ -517,7 +530,7 @@ public class DatabaseCreater {
 			}
 
 		});
-		
+
 		loadPartitioned(manager, "stop_times", new ContentValuesProvider() {
 
 			@Override
@@ -530,29 +543,9 @@ public class DatabaseCreater {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
 					o.add(nextLine[headerToPos.get("trip_id")]);
-					Calendar c = Calendar.getInstance();
-					if (nextLine[3].equals("148")) {
-						for (int i = 0; i < nextLine.length; i++) {
-							// System.out.print(nextLine[i] + " ");
-						}
-						// System.out.print("\n");
-					} else {
-						// continue;
-					}
 					try {
-						if (nextLine[headerToPos.get("arrival_time")].trim()
-								.length() != 0) {
-							
-							o.add(utc(dateTimeFormat.parse("1970-01-01 "
-									+ nextLine[headerToPos.get("arrival_time")])));
-						}
-						if (nextLine[headerToPos.get("departure_time")].trim()
-								.length() != 0) {							
-							// System.out.println(c.get(Calendar.HOUR_OF_DAY)+":"+c.get(Calendar.MINUTE));
-							o.add(utc(dateTimeFormat.parse("1970-01-01 "
-									+ nextLine[headerToPos
-											.get("departure_time")])));
-						}
+						o.add(nextLine[headerToPos.get("arrival_time")]);
+						o.add(nextLine[headerToPos.get("departure_time")]);
 					} catch (Exception e) {
 						throw new RuntimeException(e);
 					}
@@ -602,35 +595,7 @@ public class DatabaseCreater {
 
 		});
 
-		loadPartitioned(manager, "stops", new ContentValuesProvider() {
 
-			@Override
-			public List<List<Object>> getContentValues(
-					Map<String, Integer> headerToPos, CSVReader reader)
-					throws IOException {
-				List<List<Object>> values = new ArrayList<List<Object>>();
-				String[] nextLine;
-				while ((nextLine = reader.readNext()) != null) {
-					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
-					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[headerToPos.get("stop_id")]);
-					o.add(nextLine[headerToPos.get("stop_name")]);
-					o.add(nextLine[headerToPos.get("stop_desc")]);
-					o.add(nextLine[headerToPos.get("stop_lat")]);
-					o.add(nextLine[headerToPos.get("stop_lon")]);
-					o.add(nextLine[headerToPos.get("zone_id")]);
-					values.add(o);
-				}
-				return values;
-			}
-
-			@Override
-			public String getInsertString() {
-				// stop_id,stop_name,stop_desc,stop_lat,stop_lon,zone_id
-				return "insert into stops (id,name,desc,lat,lon,zone_id) values (?,?,?,?,?,?)";
-			}
-
-		});
 
 		loadPartitioned(manager, "calendar", new ContentValuesProvider() {
 
@@ -686,12 +651,7 @@ public class DatabaseCreater {
 					List<Object> o = new ArrayList<Object>();
 					o.add(nextLine[headerToPos.get("service_id")]);
 					String start = nextLine[headerToPos.get("date")];
-					try {
-						Date d = dateFormat.parse(start);
-						o.add(utc(d));
-					} catch (ParseException e) {
-						throw new RuntimeException(e);
-					}
+					o.add(start);
 					o.add(nextLine[headerToPos.get("exception_type")]);
 					values.add(o);
 				}
@@ -731,6 +691,66 @@ public class DatabaseCreater {
 			public String getInsertString() {
 				// route_id,agency_id,route_short_name,route_long_name,route_type
 				return "insert into routes (id,agency_id,short_name,long_name,route_type) values (?,?,?,?,?)";
+			}
+
+		});
+		
+		final Map<Integer,Integer> stopIdToTrips = new HashMap<Integer,Integer>();
+		final Map<Integer,String> tripIdToName = new HashMap<Integer,String>();
+		
+		try {
+			Statement statement = conn.createStatement();
+			statement.execute("select s.stop_id, s.trip_id from stop_times s group by s.stop_id");
+			ResultSet s = statement.getResultSet();
+			
+			int i = 0;
+			while(s.next()) {
+				int stopId = s.getInt(1);
+				int tripId = s.getInt(2);
+				stopIdToTrips.put(stopId,tripId);				
+			}
+			s.close();
+			
+			statement.execute("select r.long_name, t.id from trips t join routes r where r.id=t.route_id group by t.id");
+			s = statement.getResultSet();
+			while(s.next()) {
+				String longName = s.getString(1);
+				int tripId = s.getInt(2);
+				tripIdToName.put(tripId,longName);
+			}
+			s.close();			
+		} catch (SQLException e) {
+			throw new RuntimeException(e);
+		}
+		
+		loadPartitioned(manager, "stops", new ContentValuesProvider() {
+
+			@Override
+			public List<List<Object>> getContentValues(
+					Map<String, Integer> headerToPos, CSVReader reader)
+					throws IOException {
+				List<List<Object>> values = new ArrayList<List<Object>>();
+				String[] nextLine;
+				while ((nextLine = reader.readNext()) != null) {
+					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
+					List<Object> o = new ArrayList<Object>();
+					int stopId = Integer.parseInt(nextLine[headerToPos.get("stop_id")]); 
+					o.add(stopId);
+					o.add(nextLine[headerToPos.get("stop_name")]);
+					int tripId = stopIdToTrips.get(stopId);
+					o.add(tripIdToName.get(tripId));
+					o.add(nextLine[headerToPos.get("stop_lat")]);
+					o.add(nextLine[headerToPos.get("stop_lon")]);
+					o.add(nextLine[headerToPos.get("zone_id")]);
+					values.add(o);
+				}
+				return values;
+			}
+
+			@Override
+			public String getInsertString() {
+				// stop_id,stop_name,stop_desc,stop_lat,stop_lon,zone_id
+				return "insert into stops (id,name,desc,lat,lon,zone_id) values (?,?,?,?,?,?)";
 			}
 
 		});
