@@ -473,10 +473,10 @@ public class DatabaseCreater {
 				"INSERT INTO android_metadata VALUES ('en_US')",
 				"create index service_index on trips(service_id)",
 				"create index schedule_index on schedule(departure_id,arrival_id)",
-				//"create index trip_index on stop_times(trip_id)",
+				"create index trip_index on stop_times(trip_id)",
 				"create index stop_index on stop_times(stop_id)",
 				//"create index stop2_index on stop_times(stop_id,trip_id)",
-				//"create index sequence_index on stop_times(sequence)"
+				"create index sequence_index on stop_times(sequence)"
 				};
 
 		try {
@@ -736,7 +736,13 @@ public class DatabaseCreater {
 					List<Object> o = new ArrayList<Object>();
 					int stopId = Integer.parseInt(nextLine[headerToPos.get("stop_id")]); 
 					o.add(stopId);
-					o.add(nextLine[headerToPos.get("stop_name")]);
+					String stopName = nextLine[headerToPos.get("stop_name")];
+					if(stopId==38291) {
+						if(stopName.equals("TRENTON TRANSIT CENTER")) {
+							stopName = stopName + " - RIVERLINE";
+						}
+					}
+					o.add(stopName);
 					int tripId = stopIdToTrips.get(stopId);
 					o.add(tripIdToName.get(tripId));
 					o.add(nextLine[headerToPos.get("stop_lat")]);
