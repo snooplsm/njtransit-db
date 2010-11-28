@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.TreeMap;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -44,8 +45,6 @@ import au.com.bytecode.opencsv.CSVReader;
 public class DatabaseCreater {
 
 	private static DateFormat dateFormat = new SimpleDateFormat("yyyyMMdd");
-	private static DateFormat dateTimeFormat = new SimpleDateFormat(
-			"yyyy-dd-MM kk:mm:ss");
 	private DateFormat local = DateFormat.getDateTimeInstance(
 			DateFormat.MEDIUM, DateFormat.FULL);
 	private static final Logger log = LoggerFactory
@@ -82,6 +81,9 @@ public class DatabaseCreater {
 	private File workDB;
 
 	private String workDir;
+	
+	private Map<String,Integer> stringIdToIntegerId = new HashMap<String,Integer>();
+	private int last;
 
 	private int splitKiloBytes = 50;
 	private int splitBytes = 50 * 1024;
@@ -443,6 +445,25 @@ public class DatabaseCreater {
 			}
 		}
 	}
+	
+	private Integer stringIdToIntegerId(String id) {
+		Integer k = null;
+		try {
+			k = Integer.parseInt(id);
+		} catch (NumberFormatException e) {
+			try {
+				k = this.stringIdToIntegerId.get(id);
+			}catch (Exception ex) {
+				
+			}
+			if(k==null) {
+				last+=1;
+				k = last;
+				this.stringIdToIntegerId.put(id, k);				
+			}
+		}
+		return k;
+	}
 
 	private void populateDatabase() {
 		Connection conn = null;
@@ -488,6 +509,7 @@ public class DatabaseCreater {
 		}
 
 		final TransactionManager manager = new TransactionManager(conn);
+				
 
 		loadPartitioned(manager, "agency", new ContentValuesProvider() {
 
@@ -510,7 +532,7 @@ public class DatabaseCreater {
 								"Weird case, more than 1 timezone, app not able to handle this.");
 					}
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[headerToPos.get("agency_id")]);
+					o.add(stringIdToIntegerId(nextLine[headerToPos.get("agency_id")]));
 					o.add(nextLine[headerToPos.get("agency_name")]);
 					o.add(nextLine[headerToPos.get("agency_url")]);
 
@@ -542,7 +564,7 @@ public class DatabaseCreater {
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[headerToPos.get("trip_id")]);
+					o.add(stringIdToIntegerId(nextLine[headerToPos.get("trip_id")]));
 					try {
 						o.add(nextLine[headerToPos.get("arrival_time")]);
 						o.add(nextLine[headerToPos.get("departure_time")]);
@@ -550,10 +572,10 @@ public class DatabaseCreater {
 						throw new RuntimeException(e);
 					}
 
-					o.add(nextLine[3]);
-					o.add(nextLine[4]);
-					o.add(nextLine[5]);
-					o.add(nextLine[6]);
+					o.add(stringIdToIntegerId(nextLine[headerToPos.get("stop_id")]));
+					o.add(nextLine[headerToPos.get("stop_sequence")]);
+					o.add(nextLine[headerToPos.get("pickup_type")]);
+					o.add(nextLine[headerToPos.get("drop_off_type")]);
 					values.add(o);
 				}
 				return values;
@@ -577,9 +599,9 @@ public class DatabaseCreater {
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[headerToPos.get("route_id")]);
-					o.add(nextLine[headerToPos.get("service_id")]);
-					o.add(nextLine[headerToPos.get("trip_id")]);
+					o.add(stringIdToIntegerId(nextLine[headerToPos.get("route_id")]));
+					o.add(stringIdToIntegerId(nextLine[headerToPos.get("service_id")]));
+					o.add(stringIdToIntegerId(nextLine[headerToPos.get("trip_id")]));
 					o.add(nextLine[headerToPos.get("trip_headsign")]);
 					o.add(nextLine[headerToPos.get("direction_id")]);
 					o.add(nextLine[headerToPos.get("block_id")]);
@@ -607,7 +629,7 @@ public class DatabaseCreater {
 				String[] nextLine;
 				while ((nextLine = reader.readNext()) != null) {
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[headerToPos.get("service_id")]);// service_id
+					o.add(stringIdToIntegerId(nextLine[headerToPos.get("service_id")]));// service_id
 					o.add(nextLine[headerToPos.get("monday")]);// monday
 					o.add(nextLine[headerToPos.get("tuesday")]);// tue
 					o.add(nextLine[headerToPos.get("wednesday")]);// wed
@@ -649,7 +671,7 @@ public class DatabaseCreater {
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[headerToPos.get("service_id")]);
+					o.add(stringIdToIntegerId(nextLine[headerToPos.get("service_id")]));
 					String start = nextLine[headerToPos.get("date")];
 					o.add(start);
 					o.add(nextLine[headerToPos.get("exception_type")]);
@@ -677,8 +699,8 @@ public class DatabaseCreater {
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					o.add(nextLine[headerToPos.get("route_id")]);
-					o.add(nextLine[headerToPos.get("agency_id")]);
+					o.add(stringIdToIntegerId(nextLine[headerToPos.get("route_id")]));
+					o.add(stringIdToIntegerId(nextLine[headerToPos.get("agency_id")]));
 					o.add(nextLine[headerToPos.get("route_short_name")]);
 					o.add(nextLine[headerToPos.get("route_long_name")]);
 					o.add(nextLine[headerToPos.get("route_type")]);
@@ -705,8 +727,8 @@ public class DatabaseCreater {
 			
 			int i = 0;
 			while(s.next()) {
-				int stopId = s.getInt(1);
-				int tripId = s.getInt(2);
+				int stopId = stringIdToIntegerId(s.getString(1));
+				int tripId = stringIdToIntegerId(s.getString(2));
 				stopIdToTrips.put(stopId,tripId);				
 			}
 			s.close();
@@ -734,7 +756,7 @@ public class DatabaseCreater {
 				while ((nextLine = reader.readNext()) != null) {
 					// trip_id,arrival_time,departure_time,stop_id,stop_sequence,pickup_type,drop_off_type
 					List<Object> o = new ArrayList<Object>();
-					int stopId = Integer.parseInt(nextLine[headerToPos.get("stop_id")]); 
+					int stopId = stringIdToIntegerId(nextLine[headerToPos.get("stop_id")]); 
 					o.add(stopId);
 					String stopName = nextLine[headerToPos.get("stop_name")];
 					if(stopId==38291) {
